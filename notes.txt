@@ -1,0 +1,59 @@
+Main idea:
+Server “listening post”
+Publish tasks
+Receive results of those tasks
+Implant
+Programs that runs on target computer 
+Makes contact with server to figure out what tasks to perform
+Execute those tasks
+Send results to server 
+Client
+Where operator can create manage and submit tasks
+Ex tasks: returning information, executing OS commands, injecting, stealing, etc.
+
+Things to make it better;
+Make it hard to identify listening post
+Resiliency
+Redirector: another server that proxies communication from implants and forwards it to server 
+To not expose address of listening post to the implant
+Segment the code
+Diff channels and diff servers or else its easy for defenders to take down c2
+Multiple servers to handle different parts of the operation
+One for basic communication (short haul tasks) to receive instant feedback
+Other for reestablishing access in target network (longn haul tasks)
+Can expect the short haul task to be taken down but you can regain access through the second one
+
+Server/Listening Post
+---------- what our server can do ---------
+- client talks to server in 4 diff ways 
+- grpc is the framework used to have those 4 types of com
+
+
+
+Allow users to submit taks and publish them for retrieval by the implant
+Let users read tasks that have been submitted
+Since its through http…
+Publish taks after receiving a GET request from the implant 
+Ingest task results from an implant POST request
+(Implement these as a REST API)
+
+Database: → testing use Postman
+Db.py → initializing database with flask app as input
+Models.py → where models are defined
+Resources that map to each API endpoint
+/tasks endpoint
+Handling creation of tasks (AddAPI)
+Get all task objects in the database → convert them to JSON format → put them in a variable (GET response)
+Displaying existing tasks (ListTasks)
+Get JSON payload to find out how many taks are in the request → load it into a JSON object → for each task object, add UUID for tracking → save it to database → store in task_options array
+
+imlant:
+to add new tasks:
+1. open the tasks.h header file 
+- add definitions for new tasks
+    - basic structure is 
+        1. write a constructor 
+        2. declare what the key is for the task
+        - this is the text value we'll send from the server to specify which task we want to run
+        - also what goes in the addtask request
+2. write in task.cpp 
