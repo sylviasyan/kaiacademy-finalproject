@@ -70,7 +70,6 @@ class GreeterServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
-
 def add_GreeterServicer_to_server(servicer, server):
     rpc_method_handlers = {
             'SayHello': grpc.unary_unary_rpc_method_handler(

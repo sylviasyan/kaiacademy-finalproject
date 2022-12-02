@@ -19,7 +19,7 @@ def get_client_stream_requests():
 
 def run(): # runs the client
      # we want to create a channel we can connect our gRPC on
-    with grpc.insecure_channel('localhost:50051') as channel: # allows us to make gRPC calls
+    with grpc.insecure_channel('localhost:5000') as channel: # allows us to make gRPC calls
         stub = greet_pb2_grpc.GreeterStub(channel)
         # we use the stub to call the gRPC calls
         print("1. SayHello - Unary")
