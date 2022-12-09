@@ -9,18 +9,19 @@
 #include <boost/system/system_error.hpp>
 
 int main(){
-    //specify address, port, and URI of server endpoints
-    const auto host = "localhost";
+    //specify address, port, and URI of server 
     const auto port = 5000 ;
-    const auto uri = "/" //--> holds the response from the implant
+    const auto host = "localhost";
+    const auto uri = "/" //--> implant response
     
-    // Instantiate our implant object
+    // Instantiate implant obj
     Implant implant{ host, port, uri }; 
-    // Call the beacon method to start beaconing loop
+    // Call the beacon method to start loop
     try {
-        implant.beacon(); //begins communication with server
+        implant.beacon(); //starts communicating w server
     }
     catch (const boost::system::system_error& se) {
-        printf("\nSystem error: %s\n", se.what());
+        printf("\nerror: %s\n", se.what());
     }
 }
+
